@@ -1,0 +1,468 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Pharmacy Validation Queue</title>
+<style>
+/* Layout: attention queue on the left, the selected script's detail on the right; stacks on phones. */
+:root{
+  --bg:#EEF7F2; --panel:#FFFFFF; --fg:#1E2A2A; --muted:#5B6B68; --line:#D9E3DF;
+  --accent:#2F6F57; --green:#3FA37A; --chip:#0F2A24; --chip-fg:#FFFFFF;
+  --orange:#E8955A; --orange-bg:#FBE7D8; --green-bg:#DDF0E6; --diff:#FBE7D8;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1F1B; --panel:#162B26; --fg:#E6F2EE; --muted:#9DB3AD; --line:#2A413B;
+    --accent:#7FD0AE; --green:#3FA37A; --chip:#7FD0AE; --chip-fg:#0F1F1B;
+    --orange:#E8955A; --orange-bg:#3A2A20; --green-bg:#1C3B30; --diff:#3A2A20;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1F1B; --panel:#162B26; --fg:#E6F2EE; --muted:#9DB3AD; --line:#2A413B;
+  --accent:#7FD0AE; --green:#3FA37A; --chip:#7FD0AE; --chip-fg:#0F1F1B;
+  --orange:#E8955A; --orange-bg:#3A2A20; --green-bg:#1C3B30; --diff:#3A2A20;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Arial,Helvetica,sans-serif;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:16px}
+h1{font-size:20px;margin:0;line-height:1.2;text-wrap:balance}
+h2{font-size:15px;margin:0 0 8px;text-wrap:balance}
+h3{font-size:13px;margin:0 0 4px}
+.muted{color:var(--muted)}
+.wrap{max-width:1100px;margin:0 auto;display:grid;gap:16px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:bold}
+.notice{font-size:12px;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:6px;padding:8px 10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.stat small{display:block;font-size:11px;color:var(--muted)}
+.progress{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.progress span{display:block;height:100%;background:var(--green);width:0;transition:width .2s}
+.main{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:820px){.main{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:start}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-width:0}
+.panel-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font:inherit;font-size:12px;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer}
+.tab[aria-selected="true"],.tab[aria-pressed="true"]{background:var(--chip);color:var(--chip-fg);border-color:var(--chip)}
+.bulk{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;gap:8px;font-size:13px}
+.bulk label{display:flex;gap:6px;align-items:center}
+.list{max-height:520px;overflow-y:auto}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 14px;cursor:pointer}
+.row:hover{background:var(--bg)}
+.row[aria-current="true"]{background:var(--green-bg)}
+.row:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rx{font-variant-numeric:tabular-nums;font-weight:bold;min-width:52px}
+.name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:11px;border-radius:999px;padding:2px 8px;white-space:nowrap;border:1px solid var(--line)}
+.p-match{background:var(--green-bg)}
+.p-flag{background:var(--orange-bg);border-color:var(--orange)}
+.p-call{background:var(--chip);color:var(--chip-fg);border-color:var(--chip)}
+.p-done{color:var(--accent)}
+.detail{padding:14px;display:grid;gap:14px;min-width:0}
+.back{display:none;font:inherit;border:0;background:none;color:var(--accent);padding:0;cursor:pointer;text-align:left}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:bold}
+td.num,th.num{font-variant-numeric:tabular-nums}
+tr.diff td{background:var(--diff)}
+tr.diff td:first-child{box-shadow:inset 3px 0 0 var(--orange)}
+.ok{color:var(--accent);font-weight:bold}
+.bad{color:var(--orange);font-weight:bold}
+.tablewrap{overflow-x:auto}
+.banner{border-radius:8px;padding:10px 12px;font-size:13px;border:1px solid var(--line)}
+.b-lock{background:var(--chip);color:var(--chip-fg);border-color:var(--chip)}
+.b-call{background:var(--orange-bg);border-color:var(--orange)}
+.callsheet{display:grid;gap:8px;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.callsheet select,.callsheet textarea{font:inherit;font-size:13px;width:100%;max-width:100%;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:inherit;font-size:13px;border-radius:6px;padding:8px 12px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.btn.alt{background:transparent;color:var(--fg);border-color:var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.outcome{font-size:13px;padding:8px 10px;border-radius:6px;background:var(--green-bg)}
+.log{max-height:220px;overflow-y:auto;font-size:12px;display:grid;gap:6px}
+.log div{border-left:2px solid var(--green);padding-left:8px}
+.empty{padding:18px;color:var(--muted)}
+@media (max-width:819px){
+  .main.open .panel.queue{display:none}
+  .main:not(.open) .panel.detailp{display:none}
+  .back{display:inline-block}
+}
+@media (prefers-reduced-motion:reduce){.progress span{transition:none}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="eyebrow">Prototype · Validation agent</div>
+      <h1>Morning queue for overnight scripts</h1>
+    </div>
+    <div style="display:grid;gap:6px;justify-items:end">
+      <div class="tabs" role="group" aria-label="Role">
+        <button class="tab" data-role="pharmacist" aria-pressed="true">Pharmacist</button>
+        <button class="tab" data-role="technician" aria-pressed="false">Technician</button>
+      </div>
+      <div class="muted" style="font-size:12px">Sample data for demonstration only, not client data.</div>
+    </div>
+  </div>
+
+  <div class="notice">The agent checks each script against the system record and flags mismatches. The pharmacist makes every decision, and every override is logged. Controlled drugs can only be signed off by a pharmacist.</div>
+
+  <div class="stats">
+    <div class="stat"><span class="muted">Matched</span><b id="s-match">41</b></div>
+    <div class="stat"><span class="muted">Flagged</span><b id="s-flag">6</b></div>
+    <div class="stat"><span class="muted">Needs call or review</span><b id="s-call">3</b></div>
+    <div class="stat"><span class="muted">Pharmacist overrides on flags</span><b id="s-ovr">0 of 0</b><small>Override = keeping the script value instead of the agent's system value</small></div>
+    <div class="stat"><span class="muted">Time saved this session</span><b id="t-saved">0 min</b><small id="t-basis">Base case: 3 min manual per script, 50% saved</small></div>
+  </div>
+
+  <div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px"><span id="prog-text">0 of 9 attention items resolved</span></div>
+    <div class="progress" role="progressbar" aria-label="Attention items resolved" aria-valuemin="0" aria-valuemax="9" aria-valuenow="0"><span id="prog"></span></div>
+  </div>
+
+  <div class="main" id="main">
+    <section class="panel queue" aria-label="Script queue">
+      <div class="panel-head">
+        <div class="tabs" role="tablist" aria-label="Filter scripts">
+          <button class="tab" role="tab" data-filter="all" aria-selected="true">All 50</button>
+          <button class="tab" role="tab" data-filter="attention" aria-selected="false">Attention 9</button>
+          <button class="tab" role="tab" data-filter="match" aria-selected="false">Matched 41</button>
+        </div>
+      </div>
+      <div id="bulk"></div>
+      <div class="list" id="list" role="list"></div>
+    </section>
+
+    <section class="panel detailp" aria-live="polite">
+      <div class="detail" id="detail"></div>
+    </section>
+  </div>
+
+  <section class="panel" style="padding:14px" id="phone" aria-label="Phone agent prototype">
+    <h2>Phone agent: customer calls (prototype)</h2>
+    <div class="muted" style="font-size:12px">When a customer calls the pharmacy, the agent answers basic FAQ questions so the pharmacist does not repeat them. Anything complex goes to a pharmacist with a handoff note. Sample questions only.</div>
+    <div style="display:grid;gap:10px;margin-top:10px">
+      <div class="tabs" role="group" aria-label="Speaking speed">
+        <button class="tab" data-speed="0.85" aria-pressed="false">Slow 0.85×</button>
+        <button class="tab" data-speed="1" aria-pressed="true">Standard 1.0×</button>
+        <button class="tab" data-speed="1.15" aria-pressed="false">Fast 1.15×</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="q" type="text" placeholder="Type a caller's question" aria-label="Caller question" style="flex:1 1 220px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg)">
+        <button class="btn" id="ask">Ask agent</button>
+      </div>
+      <div class="tabs">
+        <button class="tab sample" data-q="What time do you open?">What time do you open?</button>
+        <button class="tab sample" data-q="Is my refill ready?">Is my refill ready?</button>
+        <button class="tab sample" data-q="Where do I pick up my prescription?">Where do I pick up?</button>
+        <button class="tab sample" data-q="My insurance rejected my claim. Why?">Insurance rejected my claim</button>
+      </div>
+      <div id="callres" class="outcome" role="status" aria-live="polite">Ask a question to see the agent's answer.</div>
+      <div id="speedmsg" class="muted" style="font-size:12px">Speed setting applies to the voice. No audio plays in this prototype.</div>
+      <div class="banner b-call" style="font-size:12px">Phone-agent gate (proposed): the rollout expands only if at least half of basic calls are answered without a human and fewer than 1 in 10 callers are misunderstood. The agent never gives clinical advice; dose, side-effect and complex questions go to a pharmacist.</div>
+      <details>
+        <summary>FAQ repository (sample entries, store to confirm)</summary>
+        <ul style="margin:8px 0 0;padding-left:18px;font-size:13px">
+          <li>What time do you open? Weekdays 8am to 8pm. [Confirm with store]</li>
+          <li>Is my refill ready? Give your prescription number and we will check the status.</li>
+          <li>Where do I pick up my prescription? At the pharmacy counter inside the store.</li>
+          <li>Do you have flu shots? Availability is confirmed at the counter. [Confirm with store]</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+
+  <section class="panel" style="padding:14px">
+    <h2>Audit log</h2>
+    <div class="log" id="log"><div class="muted" style="border:0;padding:0">No decisions yet. Every approval, correction and escalation is recorded here with its time.</div></div>
+  </section>
+</div>
+
+<script>
+const DRUGS = [
+  ["Lisinopril","10 mg","tablet","30","1 tablet daily","30","Dr. Okafor"],
+  ["Metformin","500 mg","tablet","60","1 tablet twice daily","30","Dr. Lindqvist"],
+  ["Atorvastatin","20 mg","tablet","30","1 tablet at bedtime","30","Dr. Chen"],
+  ["Amlodipine","5 mg","tablet","30","1 tablet daily","30","Dr. Patel"],
+  ["Levothyroxine","50 mcg","tablet","30","1 tablet every morning","30","Dr. Moreau"],
+  ["Omeprazole","20 mg","capsule","30","1 capsule daily","30","Dr. Okafor"],
+  ["Sertraline","50 mg","tablet","30","1 tablet daily","30","Dr. Chen"],
+  ["Albuterol HFA","90 mcg","inhaler","1","2 puffs as needed","30","Dr. Moreau"]
+];
+const FIELDS = [["drug","Drug"],["strength","Strength"],["form","Form"],["qty","Quantity"],["sig","Directions"],["days","Days supply"],["prescriber","Prescriber"],["refills","Refills"]];
+const CONTROLLED = {drug:"Oxycodone",strength:"5 mg",form:"tablet",qty:"20",sig:"1 tablet every 6 hours as needed",days:"5",prescriber:"Dr. Chen",refills:"0"};
+// Script vs system overrides: [script value, system value]. Ids match the deck's sample.
+const SPEC = {
+  1029:{sig:["2 tablets daily","1 tablet daily"],kind:"flag"},
+  1037:{days:["90","30"],kind:"flag"},
+  1044:{prescriber:["Dr. Pateal","Dr. Patel"],kind:"flag"},
+  1049:{refills:["not written","3"],kind:"call",reason:"The refill count is missing on the script. Confirm it with the prescriber before filling."},
+  1051:{strength:["180 mcg","90 mcg"],kind:"flag"},
+  1055:{refills:["5","2"],kind:"flag"},
+  1058:{qty:["60","30"],kind:"flag"},
+  1063:{form:["tablet","capsule"],kind:"call",reason:"The form on the script differs from the system record. Confirm the form with the prescriber."},
+  1067:{controlled:true,kind:"controlled",reason:"Schedule II controlled substance. Only a pharmacist can sign off after checking the script."}
+};
+const MINUTES_MANUAL = 3, AI_SHARE = 0.5, SPOT_CHECK = 10; // base case from the workload model; minimum audit sample of 10 is our proposal (a 10-script check catches one hidden error only about 1 time in 4, so pilot audits measure the real error rate)
+const ITEMS = [];
+for (let id = 1020; id <= 1069; id++) {
+  const b = DRUGS[(id - 1020) % 8];
+  const rec = {drug:b[0],strength:b[1],form:b[2],qty:b[3],sig:b[4],days:b[5],prescriber:b[6],refills:"2"};
+  const scr = {...rec};
+  const sp = SPEC[id];
+  let kind = "match", reason = "";
+  if (sp) {
+    if (sp.controlled) { Object.assign(rec, CONTROLLED); Object.assign(scr, CONTROLLED); }
+    else for (const f of Object.keys(sp)) if (Array.isArray(sp[f])) { scr[f] = sp[f][0]; rec[f] = sp[f][1]; }
+    kind = sp.kind; reason = sp.reason || "";
+  }
+  ITEMS.push({id, kind, rec, scr, reason});
+}
+const ORDER = {controlled:0, call:1, flag:2, match:3};
+const LABEL = {controlled:["Controlled","p-call"], call:["Needs call","p-call"], flag:["Flagged","p-flag"], match:["Matched","p-match"]};
+const RESOLVED = new Set(["approved","system","script","signed","called"]);
+const PHARMACIST_ONLY = new Set(["approved","system","script","called","signed"]);
+const decisions = {};
+const log = [];
+let selected = null, filter = "all", role = "pharmacist";
+
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const label = (f) => FIELDS.find((x) => x[0] === f)[1].toLowerCase();
+const mismatches = (it) => FIELDS.filter(([f]) => it.scr[f] !== it.rec[f]).map(([f]) => f);
+const statusOf = (it) => decisions[it.id] ? decisions[it.id].action : null;
+const isFinal = (st) => st && st !== "callpending";
+
+function renderOverrides() {
+  const flagDecided = ITEMS.filter((i) => i.kind === "flag" && decisions[i.id] && ["system", "script"].includes(decisions[i.id].action));
+  const overrides = flagDecided.filter((i) => decisions[i.id].action === "script").length;
+  $("#s-ovr").textContent = `${overrides} of ${flagDecided.length}`;
+}
+
+function renderStats() {
+  renderOverrides();
+  const attention = ITEMS.filter((i) => i.kind !== "match");
+  const done = attention.filter((i) => RESOLVED.has(statusOf(i))).length;
+  $("#prog-text").textContent = `${done} of ${attention.length} attention items resolved`;
+  $("#prog").style.width = (done / attention.length * 100) + "%";
+  $("#prog").parentElement.setAttribute("aria-valuenow", done);
+  const processed = Object.values(decisions).filter((d) => d.action !== "callpending").length;
+  const saved = processed * MINUTES_MANUAL * AI_SHARE;
+  $("#t-saved").textContent = `${Math.round(saved * 10) / 10} min`;
+  $("#t-basis").textContent = `${processed} scripts decided · manual would take ${processed * MINUTES_MANUAL} min`;
+}
+
+function renderList() {
+  const items = ITEMS.filter((i) => filter === "all" || (filter === "attention" ? i.kind !== "match" : i.kind === "match"))
+    .sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || a.id - b.id);
+  $("#list").innerHTML = items.map((it) => {
+    const [text, cls] = LABEL[it.kind];
+    const st = statusOf(it);
+    const note = RESOLVED.has(st) ? `<span class="pill p-done">Done</span>`
+      : st === "escalated" ? `<span class="pill p-flag">Escalated</span>`
+      : `<span class="pill ${cls}">${text}</span>`;
+    return `<button class="row" role="listitem" data-id="${it.id}" aria-current="${selected === it.id}">
+      <span class="rx">Rx ${it.id}</span><span class="name">${esc(it.rec.drug)} ${esc(it.rec.strength)}</span>${note}</button>`;
+  }).join("") || `<div class="empty">No scripts in this view.</div>`;
+}
+
+function renderBulk() {
+  if (role === "technician") { $("#bulk").innerHTML = `<div class="bulk muted">Bulk approval is available to pharmacists only.</div>`; return; }
+  const pending = ITEMS.filter((i) => i.kind === "match" && !decisions[i.id]).length;
+  $("#bulk").innerHTML = pending
+    ? `<div class="bulk">
+        <div><button class="btn alt" id="bulk-open" aria-expanded="false">Approve ${pending} matched in bulk…</button></div>
+        <div id="bulk-confirm" hidden>
+          <label><input type="checkbox" id="spot"> I spot-checked ${SPOT_CHECK} of the matched scripts against the image</label>
+          <div><button class="btn" id="bulk-go" disabled>Approve ${pending} matched</button></div>
+        </div></div>`
+    : `<div class="bulk muted">All matched scripts are decided.</div>`;
+}
+
+function renderDetail() {
+  const it = ITEMS.find((i) => i.id === selected);
+  const main = $("#main");
+  if (!it) { $("#detail").innerHTML = `<div class="empty">Select a script to review it.</div>`; main.classList.remove("open"); return; }
+  const diffs = mismatches(it);
+  const rows = FIELDS.map(([f, text]) => {
+    const d = it.scr[f] !== it.rec[f];
+    return `<tr class="${d ? "diff" : ""}"><td>${text}</td><td class="num">${esc(it.scr[f])}</td><td class="num">${esc(it.rec[f])}</td><td class="${d ? "bad" : "ok"}">${d ? "Mismatch" : "Match"}</td></tr>`;
+  }).join("");
+  const st = statusOf(it);
+  const outcome = st ? `<div class="outcome" role="status">${esc(decisions[it.id].text)}</div>` : "";
+  const locked = role === "technician";
+  const btn = (act, text, cls = "") => {
+    const off = (isFinal(st) && act !== "escalated") || (locked && PHARMACIST_ONLY.has(act));
+    return `<button class="btn ${cls}" data-act="${act}" ${off ? "disabled" : ""}>${text}</button>`;
+  };
+  let banner = "", actions = "";
+  if (it.kind === "controlled") {
+    banner = `<div class="banner b-lock"><b>Controlled substance.</b> The agent cannot approve this script. A pharmacist must check it and sign off.</div>`;
+    actions = btn("signed", "Pharmacist sign-off") + btn("escalated", "Escalate to pharmacist", "alt");
+  } else if (it.kind === "match") {
+    actions = btn("approved", "Approve match");
+  } else if (it.kind === "flag") {
+    actions = btn("system", "Use system value") + btn("script", "Keep script value", "alt") + btn("escalated", "Escalate to prescriber", "alt");
+  } else {
+    banner = `<div class="banner b-call"><b>Call prep.</b> ${esc(it.reason)}</div>
+      <div class="callsheet">
+        <div><h3>Question for the prescriber</h3><div>Confirm the ${diffs.map(label).join(" and ")} on Rx ${it.id}. Script says "${esc(it.scr[diffs[0]])}"; system says "${esc(it.rec[diffs[0]])}".</div></div>
+        <label><h3 style="display:block">Call outcome</h3>
+          <select id="outcome" ${isFinal(st) ? "disabled" : ""}>
+            <option value="confirmed">Prescriber confirmed the script as written</option>
+            <option value="changed">Prescriber changed the script</option>
+            <option value="none">Not reached</option>
+          </select></label>
+        <label><h3 style="display:block">Note</h3><textarea id="cnote" rows="2" ${isFinal(st) ? "disabled" : ""} placeholder="Who you spoke to and what they said"></textarea></label>
+      </div>`;
+    actions = btn("called", "Log call and approve") + btn("escalated", "Escalate to pharmacist", "alt");
+  }
+  const roleNote = locked ? `<div class="muted" style="font-size:12px">Technician view: you can prepare and escalate. Only a pharmacist can approve or sign off.</div>` : "";
+  $("#detail").innerHTML = `
+    <button class="back" id="back">← Back to queue</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <h2 style="margin:0">Rx ${it.id}: ${esc(it.rec.drug)} ${esc(it.rec.strength)}</h2>
+      <span class="pill ${LABEL[it.kind][1]}">${LABEL[it.kind][0]}</span>
+    </div>
+    ${banner}
+    <div class="tablewrap"><table aria-label="Script compared with system record">
+      <thead><tr><th>Field</th><th class="num">Script</th><th class="num">System record</th><th>Check</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="muted" style="font-size:12px">${diffs.length ? diffs.length + " mismatch(es) highlighted." : "All fields match the system record."}</div>
+    ${roleNote}
+    <div class="actions">${actions}</div>
+    ${outcome}`;
+  main.classList.add("open");
+}
+
+const TEXT = {
+  approved: () => "Approved by pharmacist: script matches the system record.",
+  system: (it) => `Corrected to system record for ${mismatches(it).map(label).join(", ")}.`,
+  script: (it) => `Kept script value for ${mismatches(it).map(label).join(", ")}. Pharmacist note added.`,
+  escalated: () => "Escalated for further review. Not yet resolved.",
+  signed: () => "Pharmacist sign-off recorded for controlled substance.",
+  called: (it) => {
+    const out = $("#outcome") ? $("#outcome").value : "confirmed";
+    const note = $("#cnote") && $("#cnote").value.trim() ? ` Note: ${$("#cnote").value.trim()}` : "";
+    if (out === "none") return "Prescriber not reached. Script stays open.";
+    if (out === "changed") return "Prescriber changed the script; pharmacist approved the corrected version." + note;
+    return "Call completed; prescriber confirmed the script as written. Approved." + note;
+  }
+};
+
+function decide(id, action, text) {
+  decisions[id] = {action, text};
+  const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  log.unshift({t, msg: `Rx ${id}: ${text}`});
+  renderLog(); renderAll();
+}
+
+function bulkApprove() {
+  const ids = ITEMS.filter((i) => i.kind === "match" && !decisions[i.id]).map((i) => i.id);
+  const t = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  ids.forEach((id) => { decisions[id] = {action: "approved", text: `Approved in bulk after spot-check of ${SPOT_CHECK} matched scripts.`}; });
+  log.unshift({t, msg: `Bulk approved ${ids.length} matched scripts after a pharmacist spot-check of ${SPOT_CHECK}.`});
+  renderLog(); renderAll();
+}
+
+function renderLog() {
+  $("#log").innerHTML = log.length ? log.map((e) => `<div>${esc(e.t)} · ${esc(e.msg)}</div>`).join("")
+    : `<div class="muted" style="border:0;padding:0">No decisions yet. Every approval, correction and escalation is recorded here with its time.</div>`;
+}
+
+function renderCounts() {
+  $("#s-match").textContent = ITEMS.filter((i) => i.kind === "match").length;
+  $("#s-flag").textContent = ITEMS.filter((i) => i.kind === "flag").length;
+  $("#s-call").textContent = ITEMS.filter((i) => i.kind === "call" || i.kind === "controlled").length;
+}
+
+function renderAll() { renderStats(); renderBulk(); renderList(); renderDetail(); }
+
+$("#list").addEventListener("click", (e) => {
+  const row = e.target.closest(".row"); if (!row) return;
+  selected = Number(row.dataset.id); renderAll();
+});
+$("#detail").addEventListener("click", (e) => {
+  if (e.target.id === "back") { selected = null; $("#main").classList.remove("open"); renderAll(); return; }
+  const b = e.target.closest("button[data-act]"); if (!b || b.disabled) return;
+  const it = ITEMS.find((i) => i.id === selected);
+  const act = b.dataset.act;
+  if (act === "called" && $("#outcome") && $("#outcome").value === "none") {
+    decide(it.id, "callpending", TEXT.called(it)); return;
+  }
+  decide(it.id, act, TEXT[act] ? TEXT[act](it) : "");
+});
+$("#bulk").addEventListener("click", (e) => {
+  if (e.target.id === "bulk-open") {
+    const box = $("#bulk-confirm"); box.hidden = !box.hidden;
+    e.target.setAttribute("aria-expanded", String(!box.hidden));
+  }
+  if (e.target.id === "bulk-go" && !e.target.disabled) bulkApprove();
+});
+$("#bulk").addEventListener("change", (e) => {
+  if (e.target.id === "spot") $("#bulk-go").disabled = !e.target.checked;
+});
+document.querySelector(".tabs[role=tablist]").addEventListener("click", (e) => {
+  const t = e.target.closest(".tab"); if (!t) return;
+  filter = t.dataset.filter;
+  document.querySelectorAll(".tab[role=tab]").forEach((x) => x.setAttribute("aria-selected", x === t));
+  renderList();
+});
+document.querySelector(".top").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-role]"); if (!t) return;
+  role = t.dataset.role;
+  document.querySelectorAll("[data-role]").forEach((x) => x.setAttribute("aria-pressed", String(x === t)));
+  renderAll();
+});
+
+// Phone agent: answers only questions that match a FAQ entry; everything else goes to a pharmacist.
+const FAQ = [
+  {k:["open","hour","time"], a:"We open at 8am on weekdays. [Confirm with store]"},
+  {k:["refill"], a:"To check a refill, we first verify your name and date of birth, then your prescription number. [Verification step to confirm with store]"},
+  {k:["pick up","pickup","where"], a:"Pick up your prescription at the pharmacy counter inside the store."},
+  {k:["flu","shot","vaccin"], a:"Availability is confirmed at the counter. [Confirm with store]"}
+];
+let callSpeed = 1;
+const stamp = () => new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+
+function askAgent(question) {
+  const q = question.trim();
+  if (!q) { $("#callres").textContent = "Type or pick a question first."; return; }
+  const lower = q.toLowerCase();
+  const CLINICAL = ["side effect", "dose", "dosage", "how much", "should i take", "allergic", "interaction", "pregnant", "overdose"];
+  const hit = FAQ.find((f) => f.k.some((w) => lower.includes(w)));
+  if (CLINICAL.some((w) => lower.includes(w))) {
+    $("#callres").innerHTML = `<b>Passed to a pharmacist.</b> Clinical question. The agent never gives medical advice. Handoff note: caller asked "${esc(q)}".`;
+    log.unshift({t: stamp(), msg: `Phone agent escalated a clinical question to a pharmacist: "${q}"`});
+    renderLog();
+    return;
+  }
+  if (hit) {
+    $("#callres").innerHTML = `<b>Answered from FAQ.</b> ${esc(hit.a)}`;
+    log.unshift({t: stamp(), msg: `Phone agent answered from FAQ: "${q}"`});
+  } else {
+    $("#callres").innerHTML = `<b>Passed to a pharmacist.</b> Not in the FAQ. Handoff note: caller asked "${esc(q)}".`;
+    log.unshift({t: stamp(), msg: `Phone agent escalated to a pharmacist: "${q}"`});
+  }
+  renderLog();
+}
+
+$("#ask").addEventListener("click", () => { askAgent($("#q").value); });
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") askAgent($("#q").value); });
+$("#phone").addEventListener("click", (e) => {
+  const s = e.target.closest("[data-speed]");
+  if (s) {
+    callSpeed = Number(s.dataset.speed);
+    document.querySelectorAll("[data-speed]").forEach((x) => x.setAttribute("aria-pressed", String(x === s)));
+    $("#speedmsg").textContent = `Speaking rate set to ${callSpeed}×. The voice is not played in this prototype.`;
+  }
+  const smp = e.target.closest(".sample");
+  if (smp) { $("#q").value = smp.dataset.q; askAgent(smp.dataset.q); }
+});
+
+renderCounts();
+renderAll();
+</script>
